@@ -516,10 +516,23 @@
     // Start camera scanning
     async function startScanning() {
       try {
-        showAlert('Starting camera...', 'info');
+        // Check if jsQR library is available
+        if (typeof jsQR === 'undefined') {
+          showAlert('❌ QR library not loaded. Waiting 2 seconds...', 'error');
+          setTimeout(() => {
+            location.reload();
+          }, 2000);
+          return;
+        }
+
+        showAlert('📷 Starting camera...', 'info');
         
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' }
+          video: { 
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
         });
 
         const video = document.getElementById('video');
@@ -530,11 +543,22 @@
         isScanning = true;
         captureDevice = stream;
         
-        showAlert('Camera started - Point at QR code', 'info');
+        showAlert('🎯 Camera ready! Point at QR code', 'info');
+        console.log('✅ Camera started successfully');
+        console.log('📸 Device:', stream.getVideoTracks()[0].label);
+        console.log('📋 Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+        
         scanQR();
       } catch (error) {
-        showAlert(`Camera error: ${error.message}. Use manual entry instead.`, 'error');
         console.error('Camera error:', error);
+        
+        if (error.name === 'NotAllowedError') {
+          showAlert('❌ Camera permission denied. Enable in browser settings.', 'error');
+        } else if (error.name === 'NotFoundError') {
+          showAlert('❌ No camera found. Use Manual tab instead.', 'error');
+        } else {
+          showAlert(`❌ Camera error: ${error.message}. Use manual entry.`, 'error');
+        }
       }
     }
 
@@ -554,24 +578,49 @@
       const video = document.getElementById('video');
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
+      let frameCount = 0;
+      let detectionAttempts = 0;
+
+      // Check if jsQR library is loaded
+      if (typeof jsQR === 'undefined') {
+        showAlert('⚠️ QR Scanner library failed to load. Using manual entry.', 'error');
+        console.error('jsQR library not loaded from CDN');
+        return;
+      }
 
       const scan = () => {
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
+          frameCount++;
+          
+          // Only process every 3rd frame to improve performance
+          if (frameCount % 3 === 0) {
+            try {
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              ctx.drawImage(video, 0, 0);
 
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'dontInvert'
-          });
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              
+              // Try different inversion attempts for better detection
+              let code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: 'attemptBoth'
+              });
 
-          if (code) {
-            const qrData = code.data;
-            console.log('QR detected:', qrData);
-            verifyTicket(qrData);
-            stopScanning();
-            return;
+              if (code) {
+                const qrData = code.data;
+                console.log('✅ QR detected:', qrData);
+                verifyTicket(qrData);
+                stopScanning();
+                return;
+              }
+              
+              detectionAttempts++;
+              if (detectionAttempts % 60 === 0) {
+                console.log(`📸 Scanning... (${Math.floor(detectionAttempts / 60)} seconds)`);
+              }
+            } catch (e) {
+              console.error('QR scan error:', e);
+            }
           }
         }
 
@@ -580,6 +629,7 @@
         }
       };
 
+      console.log('🎬 QR Scanner starting... Point camera at QR code');
       scan();
     }
 
@@ -787,6 +837,28 @@
       loadStats();
       console.log('Backend URL:', BACKEND_URL);
       console.log('Update BACKEND_URL in the code to match your actual backend!');
+      
+      // Check if jsQR library is loaded
+      if (typeof jsQR === 'undefined') {
+        console.error('❌ jsQR library FAILED to load from CDN');
+        console.error('QR scanner will not work without this library');
+        showAlert('⚠️ QR library loading... If this persists, use Manual tab', 'error');
+        // Retry loading the library
+        setTimeout(() => {
+          location.reload();
+        }, 3000);
+      } else {
+        console.log('✅ jsQR library loaded successfully');
+        console.log('📸 Camera scanning available - click "Start Scanner" to begin');
+      }
+      
+      // Check if browser supports getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('❌ Your browser does not support camera access');
+        showAlert('⚠️ Camera not supported. Use Manual tab.', 'error');
+      } else {
+        console.log('✅ Camera API supported');
+      }
     });
   </script>
 </body>
