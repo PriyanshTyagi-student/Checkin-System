@@ -489,7 +489,9 @@
   </div>
 
   <script>
-    const BACKEND_URL = 'https://techmnhubserver.onrender.com'; // Update this!
+    const BACKEND_URL = window.location.hostname === 'localhost' 
+      ? 'http://localhost:5000'  // Local testing
+      : 'https://techmnhub-backend.onrender.com'; // Production
     let currentParticipant = null;
     let isScanning = false;
     let captureDevice = null;
