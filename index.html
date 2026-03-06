@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zonex 2026 - Check-In System</title>
+  <!-- Try multiple CDN sources for jsQR -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+  <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js" onerror="console.log('Fallback CDN: Loading from unpkg...')"></script>
   <style>
     * {
       margin: 0;
@@ -358,6 +360,27 @@
   </style>
 </head>
 <body>
+  <script>
+    // Diagnostic check - must be served via HTTP
+    if (window.location.protocol === 'file:') {
+      document.body.innerHTML = `
+        <div style="padding: 40px; text-align: center; color: #ef4444; font-family: Arial; background: #0f172a;">
+          <h1 style="color: #ef4444;">❌ Error: File Protocol Not Allowed</h1>
+          <p style="color: #94a3b8; margin: 20px 0; font-size: 16px;">This app must be opened via HTTP (localhost:8080), not as a local file!</p>
+          <hr style="border: 1px solid #333; margin: 30px 0;">
+          <p style="color: #94a3b8; margin: 15px 0;"><strong>To fix this:</strong></p>
+          <p style="background: #1e293b; padding: 15px; border-radius: 5px; font-family: monospace; color: #06b6d4; margin: 15px 0; text-align: left;">
+            cd checkin<br>python -m http.server 8080
+          </p>
+          <p style="color: #94a3b8; margin: 20px 0; font-size: 16px;">Then open your browser and go to:</p>
+          <p style="background: #1e293b; padding: 10px; border-radius: 5px; font-family: monospace; color: #06b6d4; font-size: 18px;">
+            http://localhost:8080
+          </p>
+        </div>
+      `;
+      throw new Error('Must use HTTP, not file protocol');
+    }
+  </script>
   <div class="container">
     <!-- Header -->
     <div class="header">
@@ -436,6 +459,13 @@
         <h2>📋 Recent Activity</h2>
         <div id="activityLog" style="max-height: 300px; overflow-y: auto; background: #0f172a; padding: 15px; border-radius: 10px;"></div>
         <button onclick="clearStats()" class="btn-danger" style="margin-top: 15px; width: 100%;">Clear Stats</button>
+      </div>
+
+      <div class="scanner-section">
+        <h2>🧪 Debug Tools</h2>
+        <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 10px;">Test API connection and system status</p>
+        <button onclick="testBackendConnection()" style="width: 100%; margin-bottom: 10px;">🔗 Test Backend Connection</button>
+        <button onclick="testQRDetection()" style="width: 100%;">📸 Test QR Detection</button>
       </div>
     </div>
 
@@ -516,12 +546,26 @@
     // Start camera scanning
     async function startScanning() {
       try {
-        // Check if jsQR library is available
+        // Check if jsQR library is available - if not, wait a bit more
         if (typeof jsQR === 'undefined') {
-          showAlert('❌ QR library not loaded. Waiting 2 seconds...', 'error');
-          setTimeout(() => {
-            location.reload();
-          }, 2000);
+          showAlert('📡 QR library still loading... Please wait 2 seconds', 'info');
+          console.warn('jsQR not loaded yet, waiting...');
+          
+          // Wait up to 3 seconds for library to load
+          let waited = 0;
+          const waitForLibrary = setInterval(() => {
+            waited += 100;
+            if (typeof jsQR !== 'undefined') {
+              clearInterval(waitForLibrary);
+              startScanning(); // Retry
+              return;
+            }
+            if (waited >= 3000) {
+              clearInterval(waitForLibrary);
+              showAlert('❌ QR library failed to load from CDN. Using Manual tab for now.', 'error');
+              console.error('After 3 seconds, jsQR still not loaded');
+            }
+          }, 100);
           return;
         }
 
@@ -580,6 +624,7 @@
       const ctx = canvas.getContext('2d');
       let frameCount = 0;
       let detectionAttempts = 0;
+      let consecutiveFailures = 0;
 
       // Check if jsQR library is loaded
       if (typeof jsQR === 'undefined') {
@@ -592,35 +637,40 @@
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
           frameCount++;
           
-          // Only process every 3rd frame to improve performance
-          if (frameCount % 3 === 0) {
-            try {
-              canvas.width = video.videoWidth;
-              canvas.height = video.videoHeight;
-              ctx.drawImage(video, 0, 0);
+          // Process every frame for better detection
+          try {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
 
-              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-              
-              // Try different inversion attempts for better detection
-              let code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: 'attemptBoth'
-              });
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Try multiple detection strategies
+            let code = null;
+            
+            // Strategy 1: Attempt both inverted and normal
+            code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: 'attemptBoth'
+            });
 
-              if (code) {
-                const qrData = code.data;
-                console.log('✅ QR detected:', qrData);
-                verifyTicket(qrData);
-                stopScanning();
-                return;
-              }
-              
-              detectionAttempts++;
-              if (detectionAttempts % 60 === 0) {
-                console.log(`📸 Scanning... (${Math.floor(detectionAttempts / 60)} seconds)`);
-              }
-            } catch (e) {
-              console.error('QR scan error:', e);
+            if (code && code.data) {
+              const qrData = code.data;
+              console.log('✅ QR detected:', qrData);
+              showAlert('✅ QR Code detected!', 'success');
+              verifyTicket(qrData);
+              stopScanning();
+              return;
             }
+            
+            consecutiveFailures++;
+            detectionAttempts++;
+            
+            // Log progress every 30 frames (~1 second)
+            if (detectionAttempts % 30 === 0) {
+              console.log(`📸 Scanning... (${Math.floor(detectionAttempts / 30)} seconds) - Frame size: ${canvas.width}x${canvas.height}`);
+            }
+          } catch (e) {
+            console.error('QR scan error:', e);
           }
         }
 
@@ -630,6 +680,7 @@
       };
 
       console.log('🎬 QR Scanner starting... Point camera at QR code');
+      console.log('📋 Library check:', typeof jsQR !== 'undefined' ? '✅ jsQR ready' : '❌ jsQR missing');
       scan();
     }
 
@@ -642,6 +693,8 @@
 
       registrationId = registrationId.trim().toUpperCase();
       
+      console.log('🔍 Verifying:', registrationId);
+      
       try {
         showAlert('Verifying...', 'info');
         
@@ -653,7 +706,9 @@
           body: JSON.stringify({ registrationId })
         });
 
+        console.log('Response status:', response.status);
         const data = await response.json();
+        console.log('Response data:', data);
 
         if (response.ok) {
           currentParticipant = data.user;
@@ -676,7 +731,7 @@
           stats.failed++;
           stats.activity.push({
             id: registrationId,
-            name: data.msg,
+            name: data.msg || 'Not found',
             success: false,
             time: new Date().toLocaleTimeString()
           });
@@ -687,7 +742,7 @@
         document.getElementById('manualRegId').value = '';
 
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Verification error:', error);
         showAlert(`Connection error: ${error.message}`, 'error');
         currentParticipant = null;
         document.getElementById('participantInfo').classList.remove('active');
@@ -838,19 +893,29 @@
       console.log('Backend URL:', BACKEND_URL);
       console.log('Update BACKEND_URL in the code to match your actual backend!');
       
-      // Check if jsQR library is loaded
-      if (typeof jsQR === 'undefined') {
-        console.error('❌ jsQR library FAILED to load from CDN');
-        console.error('QR scanner will not work without this library');
-        showAlert('⚠️ QR library loading... If this persists, use Manual tab', 'error');
-        // Retry loading the library
-        setTimeout(() => {
-          location.reload();
-        }, 3000);
-      } else {
-        console.log('✅ jsQR library loaded successfully');
-        console.log('📸 Camera scanning available - click "Start Scanner" to begin');
-      }
+      // Wait for jsQR library to load (give it up to 5 seconds)
+      let libraryCheckAttempts = 0;
+      const maxAttempts = 50; // 5 seconds (50 * 100ms)
+      
+      const checkLibrary = setInterval(() => {
+        libraryCheckAttempts++;
+        
+        if (typeof jsQR !== 'undefined') {
+          clearInterval(checkLibrary);
+          console.log('✅ jsQR library loaded successfully after ' + (libraryCheckAttempts * 100) + 'ms');
+          console.log('📸 Camera scanning available - click "Start Scanner" to begin');
+          showAlert('✅ Check-in app ready! Click "Start Scanner" to begin', 'success');
+          return;
+        }
+        
+        if (libraryCheckAttempts === maxAttempts) {
+          clearInterval(checkLibrary);
+          console.error('❌ jsQR library FAILED to load from CDN');
+          console.error('Attempted to load from: cdnjs.cloudflare.com and unpkg');
+          console.warn('QR scanner will not work. You can still use Manual entry.');
+          showAlert('⚠️ QR Scanner loading issue - Use Manual entry tab (📝)', 'error');
+        }
+      }, 100);
       
       // Check if browser supports getUserMedia
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -860,6 +925,72 @@
         console.log('✅ Camera API supported');
       }
     });
+
+    // Test backend connection
+    async function testBackendConnection() {
+      try {
+        showAlert('Testing backend connection...', 'info');
+        
+        const response = await fetch(`${BACKEND_URL}/api/checkin/stats`);
+        const data = await response.json();
+        
+        console.log('✅ Backend connection successful:', data);
+        showAlert(`✅ Backend OK! Total: ${data.total}, Checked in: ${data.checkedIn}`, 'success');
+      } catch (error) {
+        console.error('❌ Backend connection failed:', error);
+        showAlert(`❌ Cannot reach backend at ${BACKEND_URL}`, 'error');
+      }
+    }
+
+    // Test QR detection
+    function testQRDetection() {
+      console.log('🧪 Testing QR Detection...');
+      console.log('jsQR available?', typeof jsQR !== 'undefined');
+      
+      if (typeof jsQR === 'undefined') {
+        showAlert('❌ jsQR library not loaded yet. Waiting for CDN...', 'error');
+        console.error('jsQR is not defined - trying to reload page');
+        setTimeout(() => {
+          location.reload();
+        }, 2000);
+        return;
+      }
+
+      // Test with a sample QR code (black and white pattern)
+      // Create a test canvas with a simple pattern
+      const canvas = document.createElement('canvas');
+      canvas.width = 200;
+      canvas.height = 200;
+      const ctx = canvas.getContext('2d');
+
+      // Fill with white
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, 200, 200);
+
+      // Draw a simple test pattern
+      ctx.fillStyle = 'black';
+      // Finder pattern (top-left)
+      ctx.fillRect(0, 0, 50, 50);
+      ctx.fillRect(10, 10, 30, 30);
+      ctx.fillRect(15, 15, 20, 20);
+
+      try {
+        const imageData = ctx.getImageData(0, 0, 200, 200);
+        const code = jsQR(imageData.data, 200, 200, { inversionAttempts: 'attemptBoth' });
+        
+        if (code) {
+          console.log('✅ QR Detection working! Found:', code.data);
+          showAlert('✅ QR Detection library is working!', 'success');
+        } else {
+          console.log('ℹ️ Test pattern not recognized (expected - it\'s not a real QR)');
+          console.log('✅ jsQR library is loaded and ready');
+          showAlert('✅ jsQR library loaded and ready. Try scanning a real QR code.', 'success');
+        }
+      } catch (e) {
+        console.error('❌ QR Detection error:', e);
+        showAlert(`❌ QR Detection error: ${e.message}`, 'error');
+      }
+    }
   </script>
 </body>
 </html>
