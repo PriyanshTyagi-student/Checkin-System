@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zonex 2026 - Check-In System</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 30px;
+      background: rgba(6, 182, 212, 0.1);
+      border-radius: 20px;
+      border: 2px solid rgba(6, 182, 212, 0.3);
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      color: #06b6d4;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      color: #94a3b8;
+      font-size: 1rem;
+    }
+
+    .scanner-section {
+      background: #1e293b;
+      padding: 30px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .scanner-section h2 {
+      color: #06b6d4;
+      margin-bottom: 20px;
+      font-size: 1.3rem;
+    }
+
+    #video {
+      width: 100%;
+      border-radius: 10px;
+      border: 3px solid #06b6d4;
+      display: block;
+      margin-bottom: 15px;
+      background: #000;
+    }
+
+    .scanner-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    button {
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(6, 182, 212, 0.4);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: linear-gradient(135deg, #475569 0%, #334155 100%);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    }
+
+    .manual-input {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .manual-input input {
+      flex: 1;
+      padding: 12px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 1rem;
+    }
+
+    .manual-input input:focus {
+      outline: none;
+      border-color: #06b6d4;
+    }
+
+    .manual-input button {
+      padding: 12px 20px;
+    }
+
+    .participant-info {
+      background: #0f172a;
+      padding: 30px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+      border: 2px solid rgba(6, 182, 212, 0.3);
+      display: none;
+    }
+
+    .participant-info.active {
+      display: block;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .info-header {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid rgba(6, 182, 212, 0.2);
+    }
+
+    .status-badge {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+    }
+
+    .status-badge.pending {
+      background: rgba(234, 179, 8, 0.2);
+      border: 2px solid #eab308;
+    }
+
+    .status-badge.checked-in {
+      background: rgba(34, 197, 94, 0.2);
+      border: 2px solid #22c55e;
+    }
+
+    .status-badge.not-found {
+      background: rgba(239, 68, 68, 0.2);
+      border: 2px solid #ef4444;
+    }
+
+    .info-text h3 {
+      color: #06b6d4;
+      margin-bottom: 5px;
+    }
+
+    .info-text p {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+
+    .detail-label {
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .detail-value {
+      color: #fff;
+      font-weight: bold;
+    }
+
+    .action-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .alert {
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      display: none;
+      animation: fadeIn 0.3s;
+    }
+
+    .alert.active {
+      display: block;
+    }
+
+    .alert-success {
+      background: rgba(34, 197, 94, 0.2);
+      border: 2px solid #22c55e;
+      color: #22c55e;
+    }
+
+    .alert-error {
+      background: rgba(239, 68, 68, 0.2);
+      border: 2px solid #ef4444;
+      color: #ef4444;
+    }
+
+    .alert-info {
+      background: rgba(6, 182, 212, 0.2);
+      border: 2px solid #06b6d4;
+      color: #06b6d4;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .stat-number {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #06b6d4;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+    }
+
+    .spinner {
+      border: 4px solid rgba(6, 182, 212, 0.2);
+      border-top: 4px solid #06b6d4;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .tab-btn {
+      padding: 12px 20px;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: #94a3b8;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .tab-btn.active {
+      border-bottom-color: #06b6d4;
+      color: #06b6d4;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    @media (max-width: 768px) {
+      .header h1 {
+        font-size: 1.8rem;
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .scanner-controls {
+        grid-template-columns: 1fr;
+      }
+
+      .action-buttons {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>✅ ZONEX 2026</h1>
+      <p>Participant Check-In System</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('scanner')">🎥 Scanner</button>
+      <button class="tab-btn" onclick="switchTab('manual')">⌨️ Manual</button>
+      <button class="tab-btn" onclick="switchTab('stats')">📊 Stats</button>
+    </div>
+
+    <!-- Alert -->
+    <div id="alert" class="alert"></div>
+
+    <!-- Scanner Tab -->
+    <div id="scanner" class="tab-content active">
+      <div class="scanner-section">
+        <h2>📱 Scan QR Code</h2>
+        
+        <div class="scanner-controls">
+          <button onclick="startScanning()">🎥 Start Scanner</button>
+          <button onclick="stopScanning()" class="btn-secondary">⏹️ Stop Scanner</button>
+        </div>
+
+        <video id="video" style="display: none;"></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+
+        <div class="manual-input">
+          <input 
+            type="text" 
+            id="qrInput" 
+            placeholder="Or paste Registration ID here..." 
+            onkeypress="if(event.key==='Enter') verifyTicket(this.value)"
+          >
+          <button onclick="verifyTicket(document.getElementById('qrInput').value)">Verify</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual Tab -->
+    <div id="manual" class="tab-content">
+      <div class="scanner-section">
+        <h2>⌨️ Manual Registration ID Entry</h2>
+        
+        <input 
+          type="text" 
+          id="manualRegId" 
+          placeholder="Enter Registration ID (e.g., ZNX2026-123456)" 
+          style="width: 100%; padding: 12px; background: rgba(15,23,42,0.8); border: 2px solid rgba(255,255,255,0.1); border-radius: 10px; color: #fff; margin-bottom: 15px; font-size: 1rem;"
+        >
+        <button onclick="verifyTicket(document.getElementById('manualRegId').value)">Verify & Check-In</button>
+      </div>
+    </div>
+
+    <!-- Stats Tab -->
+    <div id="stats" class="tab-content">
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-number" id="statTotal">0</div>
+          <div class="stat-label">Total Scanned</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="statCheckedIn">0</div>
+          <div class="stat-label">Checked In</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="statFailed">0</div>
+          <div class="stat-label">Failed</div>
+        </div>
+      </div>
+
+      <div class="scanner-section">
+        <h2>📋 Recent Activity</h2>
+        <div id="activityLog" style="max-height: 300px; overflow-y: auto; background: #0f172a; padding: 15px; border-radius: 10px;"></div>
+        <button onclick="clearStats()" class="btn-danger" style="margin-top: 15px; width: 100%;">Clear Stats</button>
+      </div>
+    </div>
+
+    <!-- Participant Info (shown when verified) -->
+    <div id="participantInfo" class="participant-info">
+      <div class="info-header">
+        <div class="status-badge" id="statusBadge"></div>
+        <div class="info-text">
+          <h3 id="participantName">-</h3>
+          <p id="participantStatus">-</p>
+        </div>
+      </div>
+
+      <div id="participantDetails"></div>
+
+      <div class="action-buttons">
+        <button onclick="checkInParticipant()" id="checkInBtn">✅ Check-In</button>
+        <button onclick="clearParticipant()" class="btn-secondary">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const BACKEND_URL = 'https://your-backend-url.com'; // Update this!
+    let currentParticipant = null;
+    let isScanning = false;
+    let captureDevice = null;
+
+    // Stats
+    let stats = {
+      total: 0,
+      checkedIn: 0,
+      failed: 0,
+      activity: []
+    };
+
+    // Load stats from localStorage
+    function loadStats() {
+      const saved = localStorage.getItem('checkinStats');
+      if (saved) {
+        stats = JSON.parse(saved);
+        updateStatsDisplay();
+      }
+    }
+
+    // Save stats to localStorage
+    function saveStats() {
+      localStorage.setItem('checkinStats', JSON.stringify(stats));
+      updateStatsDisplay();
+    }
+
+    // Update stats display
+    function updateStatsDisplay() {
+      document.getElementById('statTotal').textContent = stats.total;
+      document.getElementById('statCheckedIn').textContent = stats.checkedIn;
+      document.getElementById('statFailed').textContent = stats.failed;
+
+      const activityDiv = document.getElementById('activityLog');
+      activityDiv.innerHTML = stats.activity
+        .slice(-20) // Last 20 activities
+        .reverse()
+        .map(item => `<p style="font-size: 0.9rem; margin-bottom: 8px; padding: 8px; background: rgba(6,182,212,0.1); border-left: 3px solid ${item.success ? '#22c55e' : '#ef4444'}; border-radius: 5px;">
+          <strong>${item.name || item.id}</strong><br>
+          <span style="color: #94a3b8; font-size: 0.8rem;">${item.time}</span>
+        </p>`)
+        .join('');
+    }
+
+    // Switch tabs
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      
+      document.getElementById(tabName).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    // Start camera scanning
+    async function startScanning() {
+      try {
+        showAlert('Starting camera...', 'info');
+        
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+
+        const video = document.getElementById('video');
+        video.srcObject = stream;
+        video.style.display = 'block';
+        video.play();
+
+        isScanning = true;
+        captureDevice = stream;
+        
+        showAlert('Camera started - Point at QR code', 'info');
+        scanQR();
+      } catch (error) {
+        showAlert(`Camera error: ${error.message}. Use manual entry instead.`, 'error');
+        console.error('Camera error:', error);
+      }
+    }
+
+    // Stop camera
+    function stopScanning() {
+      isScanning = false;
+      if (captureDevice) {
+        captureDevice.getTracks().forEach(track => track.stop());
+      }
+      const video = document.getElementById('video');
+      video.style.display = 'none';
+      showAlert('Scanner stopped', 'info');
+    }
+
+    // Scan QR code from video
+    function scanQR() {
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const scan = () => {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0);
+
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert'
+          });
+
+          if (code) {
+            const qrData = code.data;
+            console.log('QR detected:', qrData);
+            verifyTicket(qrData);
+            stopScanning();
+            return;
+          }
+        }
+
+        if (isScanning) {
+          requestAnimationFrame(scan);
+        }
+      };
+
+      scan();
+    }
+
+    // Verify ticket with backend
+    async function verifyTicket(registrationId) {
+      if (!registrationId || registrationId.trim() === '') {
+        showAlert('Please enter or scan a Registration ID', 'error');
+        return;
+      }
+
+      registrationId = registrationId.trim().toUpperCase();
+      
+      try {
+        showAlert('Verifying...', 'info');
+        
+        const response = await fetch(`${BACKEND_URL}/api/checkin/verify`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ registrationId })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          currentParticipant = data.user;
+          displayParticipantInfo(data.user);
+          showAlert(`✅ Found: ${data.user.fullName}`, 'success');
+          
+          stats.total++;
+          stats.activity.push({
+            id: registrationId,
+            name: data.user.fullName,
+            success: true,
+            time: new Date().toLocaleTimeString()
+          });
+        } else {
+          showAlert(`❌ ${data.msg || 'Ticket not found'}`, 'error');
+          currentParticipant = null;
+          document.getElementById('participantInfo').classList.remove('active');
+          
+          stats.total++;
+          stats.failed++;
+          stats.activity.push({
+            id: registrationId,
+            name: data.msg,
+            success: false,
+            time: new Date().toLocaleTimeString()
+          });
+        }
+
+        saveStats();
+        document.getElementById('qrInput').value = '';
+        document.getElementById('manualRegId').value = '';
+
+      } catch (error) {
+        console.error('Error:', error);
+        showAlert(`Connection error: ${error.message}`, 'error');
+        currentParticipant = null;
+        document.getElementById('participantInfo').classList.remove('active');
+      }
+    }
+
+    // Display participant information
+    function displayParticipantInfo(user) {
+      const isCheckedIn = user.checkedIn;
+      
+      let statusBadge = document.getElementById('statusBadge');
+      let statusClass = isCheckedIn ? 'checked-in' : 'pending';
+      statusBadge.className = `status-badge ${statusClass}`;
+      statusBadge.textContent = isCheckedIn ? '✅' : '⏳';
+
+      document.getElementById('participantName').textContent = user.fullName;
+      document.getElementById('participantStatus').textContent = isCheckedIn ? 'Already Checked In' : 'Pending Check-In';
+
+      const detailsHTML = `
+        <div class="detail-row">
+          <span class="detail-label">Registration ID:</span>
+          <span class="detail-value">${user.registrationId}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Email:</span>
+          <span class="detail-value">${user.email}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Mobile:</span>
+          <span class="detail-value">${user.mobile}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">College:</span>
+          <span class="detail-value">${user.college}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Category:</span>
+          <span class="detail-value">${user.category}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Activities:</span>
+          <span class="detail-value">${user.subCategory?.join(', ') || 'N/A'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Pass Type:</span>
+          <span class="detail-value">${user.passName || 'N/A'}</span>
+        </div>
+        ${user.checkInTime ? `
+        <div class="detail-row">
+          <span class="detail-label">Checked In At:</span>
+          <span class="detail-value">${new Date(user.checkInTime).toLocaleString()}</span>
+        </div>
+        ` : ''}
+      `;
+
+      document.getElementById('participantDetails').innerHTML = detailsHTML;
+      document.getElementById('participantInfo').classList.add('active');
+
+      // Update button state
+      const checkInBtn = document.getElementById('checkInBtn');
+      if (isCheckedIn) {
+        checkInBtn.disabled = true;
+        checkInBtn.textContent = '✅ Already Checked In';
+      } else {
+        checkInBtn.disabled = false;
+        checkInBtn.textContent = '✅ Check-In';
+      }
+    }
+
+    // Check in participant
+    async function checkInParticipant() {
+      if (!currentParticipant) {
+        showAlert('No participant selected', 'error');
+        return;
+      }
+
+      const checkInBtn = document.getElementById('checkInBtn');
+      checkInBtn.disabled = true;
+      checkInBtn.innerHTML = '<div class="spinner"></div>';
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/checkin/checkin`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            registrationId: currentParticipant.registrationId,
+            userId: currentParticipant._id
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          showAlert(`✅ Checked in: ${currentParticipant.fullName}`, 'success');
+          currentParticipant.checkedIn = true;
+          currentParticipant.checkInTime = new Date().toISOString();
+          displayParticipantInfo(currentParticipant);
+          
+          stats.checkedIn++;
+          saveStats();
+        } else {
+          showAlert(`❌ ${data.msg || 'Check-in failed'}`, 'error');
+          checkInBtn.disabled = false;
+          checkInBtn.textContent = '✅ Check-In';
+        }
+
+      } catch (error) {
+        console.error('Error:', error);
+        showAlert(`Error: ${error.message}`, 'error');
+        checkInBtn.disabled = false;
+        checkInBtn.textContent = '✅ Check-In';
+      }
+    }
+
+    // Clear participant
+    function clearParticipant() {
+      currentParticipant = null;
+      document.getElementById('participantInfo').classList.remove('active');
+      document.getElementById('qrInput').value = '';
+      document.getElementById('manualRegId').value = '';
+    }
+
+    // Show alert
+    function showAlert(message, type = 'info') {
+      const alert = document.getElementById('alert');
+      alert.textContent = message;
+      alert.className = `alert alert-${type} active`;
+
+      setTimeout(() => {
+        alert.classList.remove('active');
+      }, 5000);
+    }
+
+    // Clear stats
+    function clearStats() {
+      if (confirm('Clear all statistics?')) {
+        stats = { total: 0, checkedIn: 0, failed: 0, activity: [] };
+        saveStats();
+        showAlert('Stats cleared', 'success');
+      }
+    }
+
+    // Load stats on page load
+    window.addEventListener('load', () => {
+      loadStats();
+      console.log('Backend URL:', BACKEND_URL);
+      console.log('Update BACKEND_URL in the code to match your actual backend!');
+    });
+  </script>
+</body>
+</html>
