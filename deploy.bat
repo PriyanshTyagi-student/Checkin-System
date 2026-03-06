@@ -44,7 +44,7 @@ findstr /C:"const BACKEND_URL" "%CD%\index.html" > nul
 if %ERRORLEVEL% equ 0 (
     echo [OK] BACKEND_URL configuration found
     
-    findstr /C:"https://your-backend-url.com" "%CD%\index.html" > nul
+    findstr /C:"http://localhost:5000" "%CD%\index.html" > nul
     if %ERRORLEVEL% equ 0 (
         echo [WARN] BACKEND_URL still set to placeholder!
         echo        Update it before deploying to production
